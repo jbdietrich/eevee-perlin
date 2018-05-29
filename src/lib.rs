@@ -1,6 +1,3 @@
-extern crate rand;
-
-use rand::distributions::{Normal, IndependentSample, Range};
 use std::collections::HashMap;
 
 type Point = f64;
@@ -9,31 +6,28 @@ type Coord = i64;
 #[derive(Debug)]
 pub struct PointValueError;
 
-#[derive(Debug)]
-pub struct PerlinNoiseGenerator {
+pub struct PerlinNoiseGenerator<'a> {
     dimension: usize,
     octaves: i32,
     scale_factor: f64,
     gradient_cache: HashMap<Vec<Coord>, Gradients>,
     tiles: Vec<u32>,
+    rng: &'a Fn() -> f64,
 }
 
 #[derive(Debug)]
 struct Gradients(Vec<Point>);
 
 impl Gradients {
-    fn from_dimension(dimension: usize) -> Gradients {
-        let mut rng = rand::thread_rng();
+    fn from_dimension(dimension: usize, rng: &Fn() -> f64) -> Gradients {
         let mut gradients = Gradients(Vec::with_capacity(dimension));
 
         if dimension == 1 {
-            let range = Range::new(-1.0, 1.0);
-            gradients.0.push(range.ind_sample(&mut rng));
+            gradients.0.push(rng());
             gradients
         } else {
-            let normal = Normal::new(0.0, 1.0);
             let random_points =
-                (0..dimension).map(|_| normal.ind_sample(&mut rng)).collect::<Vec<Point>>();
+                (0..dimension).map(|_| rng()).collect::<Vec<Point>>();
             let scale = random_points.iter().map(|x| x * x).sum::<Point>().powf(-0.5);
             random_points.iter().fold(gradients, |mut memo, point| {
                 memo.0.push(point * scale);
@@ -69,8 +63,8 @@ impl Bounds {
     }
 }
 
-impl PerlinNoiseGenerator {
-    pub fn new(dimension: usize, octaves: i32, tile: &[u32]) -> PerlinNoiseGenerator {
+impl<'a> PerlinNoiseGenerator<'a> {
+    pub fn new(dimension: usize, octaves: i32, tile: &[u32], rng: &'a Fn() -> f64) -> PerlinNoiseGenerator<'a> {
         let mut tiles = Vec::with_capacity(tile.len() + dimension);
         tiles.extend_from_slice(tile);
         for _ in 0..dimension {
@@ -83,6 +77,7 @@ impl PerlinNoiseGenerator {
             scale_factor: 2.0_f64 * (dimension as f64).powf(-0.5),
             gradient_cache: HashMap::new(),
             tiles: tiles,
+            rng: rng,
         }
     }
 
@@ -107,7 +102,7 @@ impl PerlinNoiseGenerator {
         for coords in product.drain(..) {
             let gradients = self.gradient_cache
                 .entry(coords.clone())
-                .or_insert(Gradients::from_dimension(self.dimension));
+                .or_insert(Gradients::from_dimension(self.dimension, self.rng));
 
             let dot = (0..self.dimension).fold(0.0_f64, |memo, i| {
                 memo + gradients.0[i] * (points[i] - coords[i] as Point)

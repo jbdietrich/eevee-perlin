@@ -4,7 +4,6 @@ version = "0.0.1"
 authors = ["James Dietrich <dietrich.james@gmail.com>"]
 
 [dependencies]
-rand = "0.3"
 itertools = "0.5.9"
 
 [dev-dependencies]
